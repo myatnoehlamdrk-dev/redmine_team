@@ -1,0 +1,20 @@
+# Baked into the image at /usr/src/redmine/config/database.yml.
+#
+# The official image's docker-entrypoint.sh only generates database.yml when
+# that file is ABSENT, so shipping it disables generation and the
+# REDMINE_DB_* variables below are inert - keep this file as the source of
+# truth for the connection, and keep the non-secret values in sync with
+# compose.yaml for readability.
+#
+# Secrets are read from the environment via ERB so this file can be committed:
+#   REDMINE_DB_USERNAME / REDMINE_DB_PASSWORD
+production:
+  adapter: mysql2
+  host: gateway01.ap-southeast-1.prod.aws.tidbcloud.com
+  port: 4000
+  database: redmine_1
+  encoding: utf8mb4
+  username: <%= ENV.fetch('REDMINE_DB_USERNAME') %>
+  password: <%= ENV.fetch('REDMINE_DB_PASSWORD') %>
+  sslca: /usr/local/share/redmine-ca-certificates.crt
+  ssl_mode: verify_identity

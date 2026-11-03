@@ -1,0 +1,10 @@
+# Local secrets and runtime state
+.env
+*.log
+
+# Config volume backups
+backups/
+
+# Redmine runtime overrides copied out of the container
+*.bak
+config/configuration.yml

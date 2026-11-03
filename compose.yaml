@@ -1,0 +1,63 @@
+name: redmine_team
+
+services:
+  redmine:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: redmine_team/redmine:6.1.5
+    restart: always
+    ports:
+      # Override with REDMINE_HOST_PORT in .env when 8080 is taken.
+      - "${REDMINE_HOST_PORT:-8080}:3000"
+    # Non-secret connection settings. The connection itself is defined in
+    # config/database.yml, which is baked into the image (the entrypoint skips
+    # generating it when it already exists). Credentials come from .env.
+    # These values are no longer read by the entrypoint; they are kept in sync
+    # with config/database.yml so the intent is visible from `docker inspect`.
+    environment:
+      REDMINE_DB_MYSQL: gateway01.ap-southeast-1.prod.aws.tidbcloud.com
+      REDMINE_DB_PORT: "4000"
+      REDMINE_DB_DATABASE: redmine_1
+      REDMINE_DB_USERNAME: ${DB_USERNAME}
+      REDMINE_DB_PASSWORD: ${DB_PASSWORD}
+      # Signing key for cookies/sessions. Required: without it the entrypoint
+      # writes config/initializers/secret_token.rb into the container's
+      # writable layer, so every recreate invalidates all sessions.
+      REDMINE_SECRET_KEY_BASE: ${REDMINE_SECRET_KEY_BASE:?set REDMINE_SECRET_KEY_BASE in .env}
+      # Set to 1 on every machine EXCEPT the one that owns migrations. The
+      # image entrypoint runs `rake db:migrate` at startup unless this is
+      # non-empty; with several instances sharing one TiDB database, allowing
+      # all of them to migrate means concurrent runs of the same migration,
+      # which can fail and crash-loop. Empty (the default) keeps the usual
+      # single-instance behaviour.
+      REDMINE_NO_DB_MIGRATE: ${REDMINE_NO_DB_MIGRATE:-}
+    volumes:
+      # uploaded attachments
+      - redmine_files:/usr/src/redmine/files
+      # configuration/initializers (secret_token.rb, configuration.yml, theme settings)
+      - redmine_config:/usr/src/redmine/config
+      # installed plugins
+      - redmine_plugins:/usr/src/redmine/plugins
+      # generated asset bundle
+      - redmine_assets:/usr/src/redmine/public/assets
+    healthcheck:
+      # No curl in the image; wget (busybox) is present. Redmine 6.1 has no
+      # dedicated health endpoint, so hit the anonymous login page and use
+      # wget's exit status: it is non-zero on 4xx/5xx. /login is the stable
+      # route (the /login/new "form" path alias is a 404 in 6.1).
+      # Note: when migrations/setup are pending, every route answers 503 and the
+      # healthcheck correctly reports unhealthy.
+      test:
+        - CMD-SHELL
+        - wget -q -T 5 -O /dev/null http://127.0.0.1:3000/login
+      interval: 30s
+      timeout: 10s
+      start_period: 180s
+      retries: 3
+
+volumes:
+  redmine_files:
+  redmine_config:
+  redmine_plugins:
+  redmine_assets:
